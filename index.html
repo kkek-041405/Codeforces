@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Notes App</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* Basic styling */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f9ff; /* Light blue background */
+        }
+        /* Style for individual notes */
+        .note {
+            background-color: #fffbeb; /* Light yellow background for notes */
+            border-left: 5px solid #facc15; /* Yellow accent border */
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            white-space: pre-wrap; /* Preserve whitespace and line breaks */
+            min-height: 100px; /* Ensure notes have some minimum height */
+            transition: background-color 0.2s ease-in-out; /* For copy feedback */
+        }
+        /* Style for copyable notes */
+        .note-copyable {
+            cursor: pointer;
+            border-left-color: #34d399; /* Green accent for copyable */
+        }
+        /* Style for the delete button */
+        .delete-btn {
+            transition: opacity 0.2s ease-in-out;
+        }
+        .note:hover .delete-btn {
+            opacity: 1; /* Show button on hover */
+        }
+        /* Style for copy feedback */
+        .note-copied {
+            background-color: #d1fae5; /* Light green background on copy */
+        }
+        /* Modal styles */
+        .modal-backdrop {
+            transition: opacity 0.3s ease-in-out;
+        }
+        .modal-content {
+            transition: transform 0.3s ease-in-out;
+        }
+        /* Hide scrollbar when modal is open */
+        body.modal-open {
+            overflow: hidden;
+        }
+        /* Basic toggle switch styling */
+        .toggle-checkbox:checked {
+            right: 0;
+            border-color: #10b981; /* Green */
+        }
+        .toggle-checkbox:checked + .toggle-label {
+            background-color: #10b981; /* Green */
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+
+    <div class="max-w-4xl mx-auto">
+        <h1 class="text-3xl md:text-4xl font-bold text-center text-gray-800 mb-6">My Notes</h1>
+
+        <div class="text-center mb-8">
+            <button id="open-modal-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg shadow-md hover:shadow-lg transition duration-150 ease-in-out transform hover:-translate-y-0.5">
+                + Add New Note
+            </button>
+        </div>
+
+        <h2 class="text-2xl font-semibold text-gray-700 mb-4">Saved Notes</h2>
+        <div id="notes-container" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            </div>
+    </div>
+
+    <div id="add-note-modal" class="fixed inset-0 z-50 flex items-center justify-center hidden">
+        <div id="modal-backdrop" class="modal-backdrop fixed inset-0 bg-black bg-opacity-50 opacity-0"></div>
+
+        <div class="modal-content bg-white rounded-xl shadow-2xl p-6 w-full max-w-md z-10 mx-4 transform scale-95">
+            <h3 class="text-2xl font-semibold mb-4 text-gray-800">Add a New Note</h3>
+            <textarea id="modal-note-input" rows="6" placeholder="Write your note here..." class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition duration-150 mb-4 resize-none"></textarea>
+
+            <div class="flex items-center justify-start mb-5">
+                 <label for="modal-copyable-toggle" class="flex items-center cursor-pointer">
+                    <div class="relative">
+                      <input type="checkbox" id="modal-copyable-toggle" class="sr-only toggle-checkbox">
+                      <div class="block bg-gray-300 w-10 h-6 rounded-full toggle-label transition"></div>
+                      <div class="dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition transform"></div>
+                    </div>
+                    <div class="ml-3 text-gray-700 font-medium">
+                      Make note copyable on click
+                    </div>
+                  </label>
+            </div>
+
+            <div class="flex justify-end gap-3">
+                <button id="modal-cancel-btn" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-medium py-2 px-5 rounded-lg transition duration-150">
+                    Cancel
+                </button>
+                <button id="modal-save-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-5 rounded-lg shadow-md hover:shadow-lg transition duration-150">
+                    Save Note
+                </button>
+            </div>
+        </div>
+    </div>
+
+
+    <script>
+        // --- DOM Elements ---
+        const notesContainer = document.getElementById('notes-container');
+        const openModalBtn = document.getElementById('open-modal-btn');
+        const addNoteModal = document.getElementById('add-note-modal');
+        const modalBackdrop = document.getElementById('modal-backdrop');
+        const modalNoteInput = document.getElementById('modal-note-input');
+        const modalCopyableToggle = document.getElementById('modal-copyable-toggle'); // Toggle checkbox
+        const modalSaveBtn = document.getElementById('modal-save-btn');
+        const modalCancelBtn = document.getElementById('modal-cancel-btn');
+
+        // --- Functions ---
+
+        /**
+         * Opens the Add Note modal.
+         */
+        function openModal() {
+            modalNoteInput.value = ''; // Clear previous input
+            modalCopyableToggle.checked = false; // Reset toggle to default (unchecked)
+            addNoteModal.classList.remove('hidden');
+            document.body.classList.add('modal-open'); // Prevent background scrolling
+
+            // Animate modal appearance
+            requestAnimationFrame(() => {
+                 modalBackdrop.classList.remove('opacity-0');
+                 modalBackdrop.classList.add('opacity-100');
+                 const modalContent = addNoteModal.querySelector('.modal-content');
+                 modalContent.classList.remove('scale-95');
+                 modalContent.classList.add('scale-100');
+            });
+            modalNoteInput.focus(); // Focus the textarea when modal opens
+        }
+
+        /**
+         * Closes the Add Note modal.
+         */
+        function closeModal() {
+             // Animate modal disappearance
+             modalBackdrop.classList.remove('opacity-100');
+             modalBackdrop.classList.add('opacity-0');
+             const modalContent = addNoteModal.querySelector('.modal-content');
+             modalContent.classList.remove('scale-100');
+             modalContent.classList.add('scale-95');
+
+             // Hide modal after transition
+             setTimeout(() => {
+                addNoteModal.classList.add('hidden');
+                document.body.classList.remove('modal-open'); // Allow background scrolling again
+             }, 300); // Match transition duration (sync with CSS)
+        }
+
+        /**
+         * Creates a note HTML element.
+         * @param {object} note - Note object { id: string, text: string, copyable: boolean }
+         * @returns {HTMLElement} - The note element.
+         */
+        function createNoteElement(note) {
+            const noteElement = document.createElement('div');
+            noteElement.classList.add('note', 'p-4', 'rounded-lg', 'shadow-md', 'relative', 'hover:shadow-lg', 'transition-shadow', 'flex', 'flex-col', 'justify-between');
+            noteElement.setAttribute('data-note-id', note.id);
+            noteElement.setAttribute('data-copyable', note.copyable); // Store copyable state
+
+            // Note Text Content
+            const textElement = document.createElement('p');
+            textElement.textContent = note.text;
+            textElement.classList.add('flex-grow', 'mb-2'); // Add margin bottom for spacing
+            noteElement.appendChild(textElement);
+
+            // Delete Button Container (for positioning)
+            const buttonContainer = document.createElement('div');
+            buttonContainer.classList.add('absolute', 'top-2', 'right-2');
+
+            // Delete Button
+            const deleteBtn = document.createElement('button');
+            deleteBtn.innerHTML = '&times;'; // 'x' symbol
+            deleteBtn.classList.add('delete-btn', 'text-red-500', 'hover:text-red-700', 'font-bold', 'text-xl', 'leading-none', 'opacity-0', 'focus:outline-none', 'w-6', 'h-6', 'flex', 'items-center', 'justify-center', 'bg-white', 'bg-opacity-50', 'rounded-full');
+            deleteBtn.setAttribute('aria-label', 'Delete note'); // Accessibility
+            deleteBtn.onclick = (e) => {
+                e.stopPropagation(); // Prevent triggering copy on click
+                deleteNote(note.id);
+            };
+            buttonContainer.appendChild(deleteBtn);
+            noteElement.appendChild(buttonContainer);
+
+            // Add copy functionality if copyable
+            if (note.copyable) {
+                noteElement.classList.add('note-copyable');
+                noteElement.addEventListener('click', () => {
+                    copyNoteToClipboard(note.text, noteElement);
+                });
+                // Add a small visual indicator (optional)
+                const copyIcon = document.createElement('span');
+                copyIcon.innerHTML = '📋'; // Clipboard emoji or an SVG icon
+                copyIcon.classList.add('absolute', 'bottom-2', 'right-2', 'text-xs', 'opacity-50');
+                copyIcon.title = 'Click to copy';
+                noteElement.appendChild(copyIcon);
+            }
+
+
+            return noteElement;
+        }
+
+        /**
+         * Copies the note text to the clipboard and provides feedback.
+         * @param {string} text - The text to copy.
+         * @param {HTMLElement} noteElement - The note element that was clicked.
+         */
+        function copyNoteToClipboard(text, noteElement) {
+            if (!navigator.clipboard) {
+                // Fallback for older browsers or insecure contexts
+                alert("Clipboard API not available. Cannot copy.");
+                return;
+            }
+            navigator.clipboard.writeText(text).then(() => {
+                // Success feedback
+                console.log('Text copied to clipboard');
+                noteElement.classList.add('note-copied'); // Add feedback class
+
+                // Change icon/text temporarily (optional)
+                const copyIcon = noteElement.querySelector('.absolute.bottom-2.right-2');
+                const originalIconHTML = copyIcon ? copyIcon.innerHTML : '';
+                 if(copyIcon) copyIcon.innerHTML = '✅ Copied!';
+
+                setTimeout(() => {
+                    noteElement.classList.remove('note-copied'); // Remove feedback class
+                    if(copyIcon) copyIcon.innerHTML = originalIconHTML; // Restore icon
+                }, 1500); // Duration of feedback
+            }).catch(err => {
+                // Error feedback
+                console.error('Failed to copy text: ', err);
+                alert("Failed to copy text. See console for details.");
+            });
+        }
+
+
+        /**
+         * Adds a new note to the display and saves it (triggered from modal).
+         */
+        function addNote() {
+            const noteText = modalNoteInput.value.trim();
+            const isCopyable = modalCopyableToggle.checked; // Get toggle state
+
+            if (noteText === '') {
+                alert('Please enter some text for your note.'); // Simple validation
+                modalNoteInput.focus(); // Keep focus in modal textarea
+                return;
+            }
+
+            const newNote = {
+                id: `note-${Date.now()}-${Math.random().toString(16).slice(2)}`, // Unique ID
+                text: noteText,
+                copyable: isCopyable // Save copyable state
+            };
+
+            const noteElement = createNoteElement(newNote);
+            notesContainer.insertBefore(noteElement, notesContainer.firstChild); // Add new notes to the top
+
+            saveNotes(); // Save all notes including the new one
+            closeModal(); // Close the modal after saving
+        }
+
+        /**
+         * Saves the current state of notes to localStorage.
+         */
+        function saveNotes() {
+            const notes = [];
+            // Get notes in the current display order (newest first)
+            document.querySelectorAll('#notes-container .note').forEach(noteElement => {
+                notes.push({
+                    id: noteElement.dataset.noteId,
+                    text: noteElement.querySelector('p').textContent,
+                    // Read copyable state from data attribute, converting string 'true'/'false' to boolean
+                    copyable: noteElement.dataset.copyable === 'true'
+                });
+            });
+            // Store notes as they are (newest first)
+            localStorage.setItem('simpleNotes', JSON.stringify(notes));
+            console.log("Notes saved:", notes); // Debug log
+        }
+
+        /**
+         * Loads notes from localStorage and populates the display.
+         */
+        function loadNotes() {
+            const savedNotes = localStorage.getItem('simpleNotes');
+            if (savedNotes) {
+                try {
+                    const notes = JSON.parse(savedNotes);
+                    console.log("Notes loaded:", notes); // Debug log
+
+                    // Clear existing notes before loading
+                    notesContainer.innerHTML = '';
+
+                    // Append notes in the order they were saved (newest first)
+                    notes.forEach(note => {
+                        // Ensure copyable property exists (for backward compatibility if needed)
+                        const noteData = { ...note, copyable: note.copyable || false };
+                        const noteElement = createNoteElement(noteData);
+                        notesContainer.appendChild(noteElement);
+                    });
+                } catch (e) {
+                    console.error("Error parsing saved notes:", e);
+                    localStorage.removeItem('simpleNotes'); // Clear corrupted data
+                }
+            } else {
+                console.log("No saved notes found.");
+            }
+        }
+
+        /**
+         * Deletes a note by its ID from the display and storage.
+         * @param {string} noteId - The ID of the note to delete.
+         */
+        function deleteNote(noteId) {
+             if (!confirm('Are you sure you want to delete this note?')) {
+                 return;
+             }
+
+            const noteElement = document.querySelector(`.note[data-note-id="${noteId}"]`);
+            if (noteElement) {
+                noteElement.remove(); // Remove from the DOM
+                saveNotes(); // Update localStorage after deletion
+            } else {
+                console.warn(`Note with ID ${noteId} not found for deletion.`);
+            }
+        }
+
+        // --- Event Listeners ---
+
+        // Open modal button
+        openModalBtn.addEventListener('click', openModal);
+
+        // Modal buttons
+        modalSaveBtn.addEventListener('click', addNote);
+        modalCancelBtn.addEventListener('click', closeModal);
+        modalBackdrop.addEventListener('click', closeModal); // Close modal if backdrop is clicked
+
+        // Close modal with Escape key
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Escape' && !addNoteModal.classList.contains('hidden')) {
+                closeModal();
+            }
+            // Allow saving note with Ctrl+Enter or Cmd+Enter in modal textarea
+             if ((event.ctrlKey || event.metaKey) && event.key === 'Enter' && !addNoteModal.classList.contains('hidden')) {
+                addNote();
+            }
+        });
+
+
+        // --- Initialization ---
+        // Load notes from localStorage when the page loads
+        document.addEventListener('DOMContentLoaded', loadNotes);
+
+    </script>
+
+</body>
+</html>
